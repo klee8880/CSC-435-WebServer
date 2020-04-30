@@ -19,14 +19,14 @@ class WebServerWorker extends Thread {
     	
     	
       
-      //Handle cases
+    	//Handle cases
       
-      	//serve file
+      		//serve file
       
-      	//change directory
+      		//change directory
       
     } catch (IOException x) {
-      System.out.println("Connetion reset. Listening again...");
+    	System.out.println("Connetion reset. Listening again...");
     }
   }
 }
@@ -36,17 +36,17 @@ public class MyWebServer{
   public static boolean controlSwitch = true;
 
   public static void main(String a[]) throws IOException {
-    int q_len = 6; /* Number of requests for OpSys to queue */
-    int port = 2540;
-    Socket sock;
-
-    ServerSocket servsock = new ServerSocket(port, q_len);
-
-    System.out.println("Clark Elliott's Port listener running at 2540.\n");
-    while (controlSwitch) {
-    	
-      sock = servsock.accept();
-      new WebServerWorker(sock).start();
+	  int q_len = 6; /* Number of requests for OpSys to queue */
+	  int port = 2540;
+	  Socket sock;
+	
+	  ServerSocket servsock = new ServerSocket(port, q_len);
+	
+	  System.out.println("Clark Elliott's Port listener running at 2540.\n");
+	  while (controlSwitch) {
+	    	
+		  sock = servsock.accept();
+		  new WebServerWorker(sock).start();
       
     }
   }

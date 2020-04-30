@@ -6,6 +6,9 @@ import java.net.*;
 class WebServerWorker extends Thread {
   Socket sock;
   WebServerWorker (Socket s) {sock = s;}
+  
+  private static String EOL = "\r\n";
+  
   public void run(){
     // Get I/O streams from the socket:
     PrintStream out = null;
@@ -17,24 +20,26 @@ class WebServerWorker extends Thread {
     	in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
       
     	//read request from remote
-        String sockdata = in.readLine();
+        String sockdata;
         
-        //TODO: Collection data on the requirements
-        while (sockdata != null) {
-          System.out.println(sockdata);
-          System.out.flush ();
-          sockdata = in.readLine ();
+        for (int i = 0; i < 8; i++) {
+        	sockdata = in.readLine();
+        	System.out.println(sockdata);
+        	System.out.flush ();
         }
-        
-        //TODO: Remove temporary response code
-        
     	
+        //TODO:TEMPORARY RESPONSE
+        out.print("HTTP/1.1 200 OK\r\n");
+        out.print("Content-Length: 100\r\n");
+        out.print("Content-Type: text/plain\r\n\r\n");
+        out.print("<PLACEHOLDERDATA>");
+        
     	//Handle cases
       
       		//serve file
       
       		//change directory
-        System.out.println("Closing thread");
+        System.out.println("Terminated");
         sock.close();
         
     } catch (IOException x) {
@@ -52,6 +57,7 @@ public class MyWebServer{
 	  int q_len = 6;
 	  Socket sock;
 	
+	  @SuppressWarnings("resource")
 	  ServerSocket servsock = new ServerSocket(port, q_len);
 	
 	  System.out.println("Clark Elliott's Port listener running at 2540.\n");

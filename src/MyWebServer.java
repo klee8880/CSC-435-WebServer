@@ -1,9 +1,7 @@
 import java.io.*;
 import java.net.*;
 
-import javax.xml.soap.Text;
-
-//http://localhost:2540/dog.txt, and http://localhost:2540/cat.html
+//http://localhost:2540
 
 class HTMLResponse {
 	
@@ -13,7 +11,6 @@ class HTMLResponse {
 	}	
 	public static String EOL = "\r\n";
 	public String header = "HTTP/1.1 200 OK";
-	private long length = 0;
 	public contentType type = contentType.txt;
 	private StringBuilder message;
 	
@@ -42,8 +39,6 @@ class HTMLResponse {
 	public HTMLResponse append(String message) {
 		
 		if (message == null) return this;
-		
-		length += message.length();
 		this.message.append(message);
 		
 		return this;
@@ -54,34 +49,26 @@ class HTMLResponse {
 	 */
 	public HTMLResponse append(StringBuilder message) {
 		if (message == null) return this;
-		
-		length += message.length();
 		this.message.append(message);
 		return this;
 	}
-	/*
-	 * Generate a proper HTML response based on the inputs.
-	 */
+	//Generate a proper HTML response based on the inputs.
 	public String generate() {
 		
 		//HTML Header
-		StringBuilder response = new StringBuilder(header); 
-		response.append(EOL);
+		StringBuilder response = new StringBuilder(header).append(EOL);
 		//Length
-		response.append("Content-Length: "); 
-		response.append(length); 
-		response.append(EOL);
+		response.append("Content-Length: ").append(message.length()).append(EOL);
 		//ContentType
 		switch(type) {
 		case txt:
-			response.append("Content-Type: text/plain");
+			response.append("Content-Type: text/plain").append(EOL);;
 			break;
 		case html:
-			response.append("Content-Type: text/html");
+			response.append("Content-Type: text/html").append(EOL);;
 			break;
 		}
 		//Line break
-		response.append(EOL);
 		response.append(EOL);
 		
 		//Read File
@@ -96,6 +83,7 @@ class WebServerWorker extends Thread {
 	Socket sock;
 	WebServerWorker (Socket s) {sock = s;}
 	
+	@Override
 	public void run(){
 		// Get I/O streams from the socket:
 		PrintStream out = null;
@@ -114,75 +102,151 @@ class WebServerWorker extends Thread {
 			
 		    for (int i = 1; i < 8 || sockdata == null; i++) {
 		    	sockdata = in.readLine();
-		    	System.out.println(sockdata);
-		    	System.out.flush ();
 		    }
 			
 		    //Handle responses
-		    HTMLResponse message = new HTMLResponse();
+		    HTMLResponse message;
 		    
 		    //Sanitize for proper requests - Breaks code if improper request detected
+		    //Detect if not GET request
 		    if (!request[0].equals("GET")) {
-			    message = new HTMLResponse(HTMLResponse.contentType.txt);
-			    message.append("<UNHANDEDED REQEUST>");
-			    out.print(message.generate());
-			    out.flush();
-			    return;
+			    message = errorResponse();
+		    }
+		    //Detect Favicon request
+		    else if (request[1].endsWith(".ico")){
+		    	System.out.println("Favicon reqeust ignored...");
+		    	return;
+		    }
+		    //Detect root access request
+		    else if (!request[1].startsWith("/")) {
+		    	System.out.println("Request for root detected. Redirecting...");
+		    	request[1] = "/";
 		    }
 		    
 		    File target = new File("." + request[1]);
 		    
 		    //Directory
 		    if (target.isDirectory()) {
-		    	message.type = HTMLResponse.contentType.html;
-			    message.append("<pre>");
-			    message.append("<h1>Index of ").append(request[1]).append("</h1>").append(HTMLResponse.EOL);
-			    message.append(HTMLResponse.EOL);
-			    
-			    File[] dirFiles = target.listFiles();
-			    
-			    //Read content of directory
-			    for(int i = 0; i < dirFiles.length; i++) {
-			    	if (dirFiles[i].isDirectory()) {
-			    		message.append("DIR:").append("<a href=\"").append(dirFiles[i].getName()).append("\">").append(dirFiles[i].getName()).append("</a> <br>").append(HTMLResponse.EOL);
-			    	}
-			    	else if (dirFiles[i].isFile()){
-			    		message.append("FILE:").append("<a href=\"").append(dirFiles[i].getName()).append("\">").append(dirFiles[i].getName()).append("</a> <br>").append(HTMLResponse.EOL);
-			    	}
-			    }
+		    	message = printDirectory(request[1], target);
 		    }
 		    //File
 		    else if (target.isFile()) {
-		    	//TODO: HTML type files
-		    	if (request[1].endsWith(".html")) {
-		    		
-		    	}
-		    	//TODO: TXT type files
-		    	else if (request[1].endsWith(".txt")) {
-		    		
-		    	}
+		    	message = printFile(request[1], target);
+		    }
+		    //fake-cgi
+		    else if (request[1].startsWith("/cgi/")) {
+		    	System.out.println("cgi reqeust detected.");
+		    	message = CGIResponse(request[1]);
 		    }
 		    else {
-		    	message.append("<UNHANDEDED REQEUST>");
+		    	message = errorResponse();
 		    }
 		    
 		    //Respond
-		    System.out.print(message.generate());
+		    System.out.println(message.generate());
 		    out.print(message.generate());
 		    out.flush();
 		    return;
 		    
 		} catch (Exception x) {
+			x.printStackTrace();
 		   	System.out.println("Connetion reset. Listening again...");
 		}
 	}
-	
-	private HTMLResponse printDirectory () {
-		return null;
+	//Generate a HTML file for HTTP representing the file directory
+	private HTMLResponse printDirectory (String path, File file) {
+		HTMLResponse message = new HTMLResponse();
+		
+		message.type = HTMLResponse.contentType.html;
+	    message.append("<pre>");
+	    message.append("<h1>Index of ").append(path).append("</h1>").append(HTMLResponse.EOL);
+	    message.append(HTMLResponse.EOL);
+	    
+	    //TODO: add a link to the parent directory
+	    
+	    //Read content of directory
+	    File[] dirFiles = file.listFiles();
+	    for(int i = 0; i < dirFiles.length; i++) {
+	    	if (dirFiles[i].isDirectory()) {
+	    		message.append("DIR:").append("<a href=\"").append(dirFiles[i].getName()).append("/\">").append(dirFiles[i].getName()).append("</a> <br>").append(HTMLResponse.EOL);
+	    	}
+	    	else if (dirFiles[i].isFile()){
+	    		message.append("FILE:").append("<a href=\"").append(dirFiles[i].getName()).append("\">").append(dirFiles[i].getName()).append("</a> <br>").append(HTMLResponse.EOL);
+	    	}
+	    }
+		
+		return message;
+	}
+	//Generate a txt or html file for HTTP
+	private HTMLResponse printFile(String path, File file) throws IOException {
+		HTMLResponse message = new HTMLResponse();
+    	//HTML type files
+    	if (path.endsWith(".html")) {
+    		message.type = HTMLResponse.contentType.html;
+    	}
+    	//TXT type files
+    	else if (path.endsWith(".txt")) {
+    		message.type = HTMLResponse.contentType.txt;
+    	}
+    	//ERROR handler
+    	else {
+    		return errorResponse();
+    	}
+    	
+    	//read the file into 
+    	BufferedReader in = new BufferedReader(new FileReader(file));
+    	
+    	String nextLine;
+    	while((nextLine = in.readLine()) != null) {
+    		message.append(nextLine);
+    	}
+    	//close the file
+    	in.close();
+    	
+    	return message;
+	}
+	//Return computed value based on the requested CGI
+	private HTMLResponse CGIResponse(String request) {
+		
+		//Split the string into components parts
+		String[] components = request.split("/|\\?|&");
+		for (int i = 0; i < components.length; i++) {
+			System.out.println(components[i]);
+		}
+		
+		//Detect request
+		if (components[2].equals("addnums.fake-cgi")) {
+			//Format a HTML response
+			HTMLResponse response = new HTMLResponse(HTMLResponse.contentType.html);
+			//Call addnums for string
+			response.append(addnums(components[3], components[4], components[5]));
+			return response;
+		}
+		//Unhandled cases.
+		else {
+			return errorResponse();
+		}
+	}
+	//Respond with an error to the client
+	private HTMLResponse errorResponse() {
+		HTMLResponse message = new HTMLResponse();
+		message = new HTMLResponse(HTMLResponse.contentType.txt);
+	    message.append("<UNHANDEDED REQEUST>");
+	    return message;
 	}
 	
-	private HTMLResponse printFile() {
-		return null;
+	//Add Number simulated script
+	private String addnums(String name, String firstNum, String secondNum) {
+		
+		int first = Integer.parseInt(firstNum.substring(5));
+		int second = Integer.parseInt(secondNum.substring(5));
+		
+		//Build a response
+		StringBuilder response = new StringBuilder("Hello ").append(name.substring(7));
+		response.append(", the sum of ").append(first).append(" & ").append(second).append(" is ").append(first + second).append('.');
+		
+		//return a new string of responses.
+		return response.toString();
 	}
 }
 
